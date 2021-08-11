@@ -1,3 +1,4 @@
+import sys
 import functools
 
 from PIL import Image
@@ -87,10 +88,14 @@ def is_white(pixel):
 
 
 def is_red(pixel):
-    return pixel[0] == pixel[3] == 255 and pixel[1] == pixel[2] == 0
+    return pixel[0] == 255 and pixel[1] == pixel[2] == 0
 
 
-with Image.open("./pegasus.png") as im:
+if len(sys.argv) == 1:
+    print("Script requires an image file to be distorted as argument.")
+    quit()
+filename = sys.argv[1]
+with Image.open(f"./{filename}") as im:
     a = np.asarray(im)
 
 height, width, _ = a.shape
@@ -177,7 +182,10 @@ def find_right_point(rho):
         finder += 1
     return right_line[finder]
 
-alpha = np.pi / 18
+
+alpha = 0.015 * np.pi
+N_i = int(2 * np.pi * len(top_line) / 2)
+N_j = int(2 * (l_l + l_r) / 2)
 
 
 def get_phi(theta):
@@ -188,8 +196,36 @@ def get_phi(theta):
         return 2 * alpha - phi
     return phi
 
-N_i = 1600
-N_j = 16 * 27
+
+@functools.lru_cache(maxsize=None)
+def middle_line(point):
+    i, j = point
+    s = j / N_j
+    w = i / N_i
+    x_l, y_l = find_left_point(s)
+    x_r, y_r = find_right_point(s)
+    return (
+        (1 - w) * x_l + w * x_r,
+        (1 - w) * y_l + w * y_r,
+    )
+
+
+def weighted_avg_of_two(p1, p2, w):
+    if is_red(p1):
+        return p2
+    if is_red(p2):
+        return p1
+    return (1 - w) * p1 + w * p2
+
+
+def weighted_avg(a, x, y):
+    n_x, d_x = int(x), x % 1
+    n_y, d_y = int(y), y % 1
+    return np.rint(weighted_avg_of_two(
+        weighted_avg_of_two(a[n_x, n_y], a[n_x, n_y+1], d_y),
+        weighted_avg_of_two(a[n_x+1, n_y], a[n_x+1, n_y+1], d_y),
+        d_x,
+    ))
 
 
 def get_x_y(i, j):
@@ -199,27 +235,50 @@ def get_x_y(i, j):
     scale = phi / (2 * alpha)
     start = top_line[int(n_t * scale)]
     end = bottom_line[int(n_b * scale)]
-    if i < N_i / 2:
-        start_0 = left_line[0]
-        end_0 = left_line[-1]
-        p_0 = find_left_point(j / N_j)
-    else:
-        start_0 = right_line[0]
-        end_0 = right_line[-1]
-        p_0 = find_right_point(j / N_j)
+
+    """
+    start_0 = middle_line((i, 0))
+    end_0 = middle_line((i, N_j - 1))
+    p_0 = middle_line((i, j))
     return (
         int(start[0] + (p_0[0] - start_0[0]) * (end[0] - start[0]) / (end_0[0] - start_0[0])),
         int(start[1] + (p_0[1] - start_0[1]) * (end[1] - start[1]) / (end_0[1] - start_0[1])),
     )
 
+    """
+    start_0_l = left_line[0]
+    end_0_l = left_line[-1]
+    p_0_l = find_left_point(j / N_j)
+    suggestion_l = (
+        start[0] + (p_0_l[0] - start_0_l[0]) * (end[0] - start[0]) / (end_0_l[0] - start_0_l[0]),
+        start[1] + (p_0_l[1] - start_0_l[1]) * (end[1] - start[1]) / (end_0_l[1] - start_0_l[1]),
+    )
 
-for divisor in [72, 36, 18, 9]:
-    alpha = np.pi / divisor
-    a_new = np.empty_like(a, shape=(N_j, N_i, 4))
-    for j in range(N_j):
-        for i in range(N_i):
-            x, y = get_x_y(i, j)
-            a_new[j, i] = a[y, x]
-    im = Image.fromarray(a_new)
-    im.save(f"./final{divisor:02}_{N_j}.png")
+    start_0_r = right_line[0]
+    end_0_r = right_line[-1]
+    p_0_r = find_right_point(j / N_j)
+    suggestion_r = (
+        start[0] + (p_0_r[0] - start_0_r[0]) * (end[0] - start[0]) / (end_0_r[0] - start_0_r[0]),
+        start[1] + (p_0_r[1] - start_0_r[1]) * (end[1] - start[1]) / (end_0_r[1] - start_0_r[1]),
+    )
+    x_sug_l, y_sug_l = suggestion_l
+    x_sug_r, y_sug_r = suggestion_r
+    return (
+        (x_sug_l + x_sug_r)/2,
+        (y_sug_l + y_sug_r)/2,
+        # int((x_sug_l + x_sug_r)/2),
+        # int((y_sug_l + y_sug_r)/2),
+    )
+
+
+a_new = np.empty_like(a, shape=(N_j, N_i, 3))
+for j in range(N_j):
+    for i in range(N_i):
+        x, y = get_x_y(i, j)
+        #a_new[j, i] = a[y, x]
+        a_new[j, i] = weighted_avg(a, y, x)
+im = Image.fromarray(a_new)
+new_filename = f"{filename.split('.')[0]}_distorted_{N_i}_{N_j}.png"
+im.save(f"./{new_filename}")
+print("Done", flush=True)
 
