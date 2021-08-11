@@ -1,10 +1,10 @@
+import sys
 from typing import Any, Callable, List
 from functools import lru_cache
 
 from PIL import Image
 import matplotlib.pyplot as plt
 import numpy as np
-
 
 
 def pixel_is_white(pixel):
@@ -153,7 +153,11 @@ def pixel_weight(a, p):
     )
 
 
-with Image.open("./oseberg_good.png") as im:
+if len(sys.argv) == 1:
+    print("Script requires an image file to be distorted as argument.")
+    quit()
+filename = sys.argv[1]
+with Image.open(f"./{filename}") as im:
     a = np.asarray(im)
 
 if a.shape[2] == 4:
@@ -231,7 +235,5 @@ for i in range(N_i):
 
 im = Image.fromarray(image_new)
 im = im.convert('RGB')
-im.save("./out_good.jpeg")
-        
-
-
+new_filename = f"{filename.split('.')[0]}_distorted_{N_i}_{N_j}.jpeg"
+im.save(f"./{new_filename}")
