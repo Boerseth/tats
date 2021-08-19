@@ -164,8 +164,10 @@ if a.shape[2] == 4:
     a = np.delete(a, 3, 2)
 assert a.shape[2] == 3
 
-t = get_spline([np.array(p) for p in find_horizontal_line(a, True)])
-b = get_spline([np.array(p) for p in find_horizontal_line(a, False)])
+t_list = [np.array(p) for p in find_horizontal_line(a, True)]
+b_list = [np.array(p) for p in find_horizontal_line(a, False)]
+t = get_spline(t_list)
+b = get_spline(b_list)
 
 N = 2001
 ds = 1 / N
@@ -205,12 +207,22 @@ l_list = [np.array(p) for p in find_vertical_line(a, True, int(t(0)[1]))]
 r_list = [np.array(p) for p in find_vertical_line(a, False, int(t(1)[1]))]
 l = get_spline([p - l_list[0] for p in l_list])
 r = get_spline([p - r_list[0] for p in r_list])
+t_len = sum(np.linalg.norm(t1 - t2) for t1, t2 in zip(t_list[:-1], t_list[1:]))
+b_len = sum(np.linalg.norm(b1 - b2) for b1, b2 in zip(b_list[:-1], b_list[1:]))
+l_len = sum(np.linalg.norm(l1 - l2) for l1, l2 in zip(l_list[:-1], l_list[1:]))
+r_len = sum(np.linalg.norm(r1 - r2) for r1, r2 in zip(r_list[:-1], r_list[1:]))
+print("t_len", t_len)
+print("b_len", b_len)
+print("l_len", l_len)
+print("r_len", r_len)
 
 assert l(0)[0] == l(0)[1] == 0
 assert r(0)[0] == r(0)[1] == 0
 
-N_i = 2000
-N_j = 270
+N_i = int((t_len + b_len) / 2)
+N_j = int((l_len + r_len) / 2)
+#N_i = 2000
+#N_j = 270
 
 image_new = np.zeros((N_j, N_i))
 
@@ -235,5 +247,6 @@ for i in range(N_i):
 
 im = Image.fromarray(image_new)
 im = im.convert('RGB')
-new_filename = f"{filename.split('.')[0]}_distorted_{N_i}_{N_j}.jpeg"
+new_filename = filename.replace(".png", "") + f"_{N_i}_{N_j}.png"
+# new_filename = f"{filename.split('.')[0]}_distorted_{N_i}_{N_j}.jpeg"
 im.save(f"./{new_filename}")

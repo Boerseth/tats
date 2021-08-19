@@ -80,6 +80,60 @@ import matplotlib.pyplot as plt
 # the final point, but that to me seems like overkill.
 
 
+
+#-------------------------------------------------------------------------------
+# PARSE INPUT
+
+help_message = """
+This script takes an image of a cylindrically symmetrical object, framed in
+red (FF0000) on the left/right edges and white (FFFFFF) on top/below.
+
+It outputs a flattened version of the image.
+
+Options:
+    -i (Required) Name of input
+
+    -n (Optional) Scale of output
+    -o (Optional) Name of output
+"""
+
+if len(sys.argv) == 1:
+    print(help_message)
+    quit()
+args = sys.argv[1:]
+if not len(args) % 2 == 0:
+    print("Error! Every option must be followed by a value.")
+if "-i" not in args:
+    print("Error! Must provide an input file.")
+
+command = dict(zip(args[::2], args[1::2]))
+
+filepath = command["-i"]
+if not filepath.endswith(".png"):
+    print("File must be PNG")
+    quit()
+
+N = 1
+if "-n" in command:
+    try:
+        N = int(command["-n"])
+    except:
+        try:
+            N = float(command["-n"])
+        except:
+            print("Error! Provided option to -n, ", command["-n"], ", is not a valid number")
+            quit()
+
+output_filepath = filepath.replace(".png", "").replace(".PNG", "") + f"_{N}_cyl.png"
+if "-o" in command:
+    output_filepath = command["-o"]
+
+with Image.open(filepath) as im:
+    a = np.asarray(im)
+height, width, _ = a.shape
+
+
+
 #-------------------------------------------------------------------------------
 # FIND LINES
 
@@ -91,14 +145,6 @@ def is_red(pixel):
     return pixel[0] == 255 and pixel[1] == pixel[2] == 0
 
 
-if len(sys.argv) == 1:
-    print("Script requires an image file to be distorted as argument.")
-    quit()
-filename = sys.argv[1]
-with Image.open(f"./{filename}") as im:
-    a = np.asarray(im)
-
-height, width, _ = a.shape
 top_line = []
 already_found_start = False
 for x in range(width):
@@ -184,8 +230,8 @@ def find_right_point(rho):
 
 
 alpha = 0.015 * np.pi
-N_i = int(2 * np.pi * len(top_line) / 2)
-N_j = int(2 * (l_l + l_r) / 2)
+N_i = int(N * np.pi * len(top_line) / 2)
+N_j = int(N * (l_l + l_r) / 2)
 
 
 def get_phi(theta):
@@ -270,15 +316,19 @@ def get_x_y(i, j):
         # int((y_sug_l + y_sug_r)/2),
     )
 
-
+loading_bar = 11 if N_j % 10 else 10
+print("," + "-" * loading_bar + ",", flush=True)
+print("|", end="", flush=True)
 a_new = np.empty_like(a, shape=(N_j, N_i, 3))
 for j in range(N_j):
+    if j % (N_j // 10) == 0:
+        print("=", end="", flush=True)
     for i in range(N_i):
         x, y = get_x_y(i, j)
         #a_new[j, i] = a[y, x]
         a_new[j, i] = weighted_avg(a, y, x)
+print("|", flush=True)
 im = Image.fromarray(a_new)
-new_filename = f"{filename.split('.')[0]}_distorted_{N_i}_{N_j}.png"
-im.save(f"./{new_filename}")
+im.save(output_filepath)
 print("Done", flush=True)
 
